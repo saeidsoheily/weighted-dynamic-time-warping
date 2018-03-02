@@ -2,14 +2,14 @@ __author__ = 'Saeid SOHILY-KHAH'
 """
 Compute (w)dtw distance matrix for a UCR time series dataset
 Note:
-    for wdtw, the weighting function is considered as: f(w) = w^-(alpha) [line 86],
-    alpha = 1 [line 137], 
-    and w is considered as a random weight vector. [line 178] 
+    for wdtw, the weighting function is considered as: f(w) = w^-(alpha) [line 125],
+    alpha = 1 [line 176], 
+    and w is considered as a random weight vector. [line 222] 
 """
 import time
 import numpy as np
 import matplotlib.pylab as plt
-
+from multiprocessing import Pool
 
 def dtw(x, y, sakoe_chiba_band):
     # Compute the size of each time serie
@@ -69,6 +69,45 @@ def dtw(x, y, sakoe_chiba_band):
     # Return Dynamic Time Warping Distance
     # -------------------------------------------------------------------------------------------
     return dtw_cost[-1][-1]
+
+
+def dtw_pool(x):
+    global dataSet
+    return dtw(dataSet[x[0]], dataSet[x[1]], sakoe_chiba_band)
+
+
+def dtw_multiprocessing(cores_number):
+    global dataSet
+    (N, l) = dataSet.shape  # set N as number of time series and l the length of time series
+    L = []
+    for i in range(N):
+        for j in range(i + 1, N):
+            L.append([i, j])
+
+    # Start timer to compute runtime
+    # -------------------------------------------------------------------------------------------
+    start_time = time.time()
+
+    # Compute DTW multiprocessing distance between all pairs in dataset
+    # -------------------------------------------------------------------------------------------
+    print('computing dtw distance matrix (multiprocessing)...')
+
+    with Pool(cores_number) as p:
+        dMatrix = (p.map(dtw_pool, L))
+
+    distance_matrix_dtw_multiprocessing = np.empty([N, N])
+    ii = 0
+    for i in range(N):
+        distance_matrix_dtw_multiprocessing[i][i] = 0
+        for j in range(i + 1, N):
+            distance_matrix_dtw_multiprocessing[i][j] = dMatrix[ii]
+            distance_matrix_dtw_multiprocessing[j][i] = distance_matrix_dtw_multiprocessing[i][j]
+            ii = ii + 1
+
+    # Print runtime
+    # -------------------------------------------------------------------------------------------
+    print("dtw (multiprocessing) runtime is equal to: %s seconds" % round((time.time() - start_time), 2))
+    return
 
 
 def wdtw(x, y, weight_vector, sakoe_chiba_band):
@@ -133,8 +172,9 @@ def wdtw(x, y, weight_vector, sakoe_chiba_band):
 
 
 if __name__ == '__main__':
-    sakoe_chiba_band = float('inf') #
+    sakoe_chiba_band = float('inf') # windows constraint
     alpha = 1 # parameter of non-increasing weight function (see https://www.researchgate.net/publication/298789494_Generalized_k-means-based_clustering_for_temporal_data_under_weighted_and_kernel_time_warp)
+    cores_number = 4 # number of CPUs (cores) to use multiprocessing
 
     # Read data from file
     # -------------------------------------------------------------------------------------------
@@ -146,6 +186,10 @@ if __name__ == '__main__':
     (N,l) = dataSet.shape # set N as number of time series and l the length of time series
     print("number of time series: %i " %N)
     print("length of time series: %i " %l)
+
+    # Compute DTW distance between all pairs in dataset using multiprocessing
+    # -------------------------------------------------------------------------------------------
+    dtw_multiprocessing(cores_number) # computing dtw using multiprocessing
 
     # Start timer to compute runtime
     # -------------------------------------------------------------------------------------------
@@ -197,7 +241,7 @@ if __name__ == '__main__':
     plt.imshow(distance_matrix_dtw, interpolation='nearest', cmap=plt.cm.gnuplot2, extent=(0.5,N+0.5,0.5,N+0.5))
     plt.colorbar()
     plt.title('normalized distance matrix dtw')
-
+    
     plt.subplot(122)
     distance_matrix_wdtw = distance_matrix_wdtw / np.max(distance_matrix_wdtw) # normalize matrix
     plt.imshow(distance_matrix_wdtw, interpolation='nearest', cmap=plt.cm.gnuplot2, extent=(0.5,N+0.5,0.5,N+0.5))
